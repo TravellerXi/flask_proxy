@@ -56,7 +56,7 @@ def proxy():
         if original_host:
             headers["Host"] = original_host  # Ensure original domain is used
 
-        # Proxy request with corrected URL
+        # Proxy request with corrected URL, disable SSL certificate validation
         resp = requests.request(
             method=request.method,
             url=target_url,
@@ -64,7 +64,8 @@ def proxy():
             data=request.get_data(),
             cookies=request.cookies,
             allow_redirects=False,
-            timeout=10
+            timeout=10,
+            verify=False  # Disable SSL certificate verification
         )
 
         app.logger.info(f"Target server response: {resp.status_code}")
