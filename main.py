@@ -36,7 +36,7 @@ def proxy():
     dst = request.headers.get("X-Original-Dst")  # Target IP
     original_host = request.headers.get("X-Original-Host")  # Original domain
     original_path = request.headers.get("X-Original-Path", "/")  # Default to "/"
-    original_method = request.headers.get("X-Original-Method", "POST")  # Default to POST
+    original_method = request.headers.get("X-Original-Method", "GET")  # Default to GET
 
     if not dst:
         app.logger.warning("Missing X-Original-Dst header")
