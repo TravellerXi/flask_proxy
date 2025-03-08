@@ -1,6 +1,7 @@
 import requests
 import logging
 from flask import Flask, request, Response
+from ipaddress import ip_address, AddressValueError
 
 # 初始化 Flask
 app = Flask(__name__)
@@ -15,35 +16,48 @@ logging.basicConfig(
     ]
 )
 
+def format_host_for_requests(dst):
+    """修正 IPv6 地址，确保 requests 正确解析"""
+    try:
+        host, port = dst.rsplit(":", 1)
+        if ":" in host and isinstance(ip_address(host), ip_address):  # IPv6
+            return f"[{host}]:{port}"
+        return f"{host}:{port}"
+    except (ValueError, AddressValueError):
+        return dst  # 如果格式错误，直接返回原值
+
 @app.route("/proxy", methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"])
 def proxy():
-    dst = request.headers.get("X-Original-Dst")  # 获取目标地址
+    dst = request.headers.get("X-Original-Dst")  # 目标 IP（用于访问）
+    original_host = request.headers.get("X-Original-Host")  # 原始域名（用于 Host 头）
+
     if not dst:
         app.logger.warning("❌ 缺少 X-Original-Dst 头")
         return "Missing destination", 400
 
-    app.logger.info(f"🌍 收到代理请求: {request.method} {dst}{request.full_path}")
+    formatted_dst = format_host_for_requests(dst)  # 确保 IPv6 正确
+    target_url = f"http://{formatted_dst}{request.full_path}"  # 目标地址
+    display_host = original_host or dst  # 用于日志的显示
 
-    # 解析目标地址
-    try:
-        host, port = dst.rsplit(":", 1)
-        target_url = f"http://{host}:{port}{request.full_path}"
-    except ValueError:
-        app.logger.error(f"❌ 错误的目标地址格式: {dst}")
-        return f"Invalid destination format: {dst}", 400
+    app.logger.info(f"🌍 收到代理请求: {request.method} {display_host}{request.full_path}")
 
     # 记录请求详情
-    app.logger.info(f"🔗 转发到: {target_url}")
+    app.logger.info(f"🔗 目标访问 URL: {target_url}")
     app.logger.info(f"📌 请求头: {dict(request.headers)}")
     if request.get_data():
         app.logger.info(f"📦 请求 Body: {request.get_data().decode(errors='ignore')}")
 
     try:
+        # 复制 Headers，并替换 Host 头
+        headers = {k: v for k, v in request.headers.items() if k.lower() != 'host'}
+        if original_host:
+            headers["Host"] = original_host  # 让服务器识别原始域名
+
         # 代理请求
         resp = requests.request(
             method=request.method,  # 转发原始 HTTP 方法
             url=target_url,  # 目标 URL
-            headers={k: v for k, v in request.headers if k.lower() != 'host'},  # 复制 Headers，避免 Host 冲突
+            headers=headers,  # 修改 Host
             data=request.get_data(),  # 复制 Body
             cookies=request.cookies,  # 复制 Cookies
             allow_redirects=False,  # 禁止自动重定向
