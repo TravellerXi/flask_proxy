@@ -36,8 +36,6 @@ def proxy():
     dst = request.headers.get("X-Original-Dst")  # Target IP
     original_host = request.headers.get("X-Original-Host")  # Original domain
     original_path = request.headers.get("X-Original-Path", "/")  # Default to "/"
-    app.logger.info(f"Headers received: {dict(request.headers)}")  # 打印所有请求头
-    app.logger.info(f"X-Original-Host: {original_host}, X-Original-Dst: {dst}")
 
     if not dst:
         app.logger.warning("Missing X-Original-Dst header")
@@ -57,11 +55,11 @@ def proxy():
         # Copy headers and replace Host header
         headers = {k: v for k, v in request.headers.items() if k.lower() != 'host'}
 
+        # Set User-Agent to avoid being blocked
+        headers["User-Agent"] = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/110.0.0.0 Safari/537.36"
+
         # Set Host header correctly
-        if original_host and original_host.strip():
-            headers["Host"] = original_host.strip()
-        else:
-            headers["Host"] = dst  # Use raw IP if no FQDN is available
+        headers["Host"] = original_host.strip() if original_host and original_host.strip() else dst
 
         # Proxy request with corrected URL, disable SSL certificate validation
         resp = requests.request(
@@ -72,11 +70,18 @@ def proxy():
             cookies=request.cookies,
             allow_redirects=False,
             timeout=10,
-            verify=False  # Disable SSL certificate verification
+            verify=False,  # Disable SSL certificate verification
+            stream=True  # Handle chunked encoding manually
         )
 
+        try:
+            response_content = resp.raw.read()  # Read response content
+        except requests.exceptions.ChunkedEncodingError:
+            app.logger.error(f"⚠ Chunked Encoding Error: {target_url}")
+            response_content = b""  # Return empty body if chunked encoding fails
+
         app.logger.info(f"Target server response: {resp.status_code}")
-        return Response(resp.content, status=resp.status_code, headers=dict(resp.headers))
+        return Response(response_content, status=resp.status_code, headers=dict(resp.headers))
 
     except requests.Timeout:
         app.logger.error(f"Proxy request timeout: {target_url}")
