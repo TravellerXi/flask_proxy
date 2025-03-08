@@ -3,7 +3,7 @@ import requests
 import struct
 
 # 远程 Flask 代理服务器地址
-FLASK_PROXY = "http://127.0.0.1:5000/proxy"
+FLASK_PROXY = "http://192.168.0.115:5555/proxy"
 
 # 监听 HTTP / HTTPS 流量
 FILTER_RULE = "tcp and (outbound and tcp.DstPort == 80 or tcp.DstPort == 443)"

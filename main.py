@@ -12,7 +12,10 @@ def proxy():
     print(f"🌍 收到代理请求: {dst}")
 
     # 解析目标地址
-    host, port = dst.split(":")
+    try:
+        host, port = dst.rsplit(":", 1)
+    except ValueError:
+        raise ValueError(f"Invalid dst format: {dst}")
     target_url = f"http://{host}:{port}"
 
     try:
