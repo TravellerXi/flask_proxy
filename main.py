@@ -36,6 +36,8 @@ def proxy():
     dst = request.headers.get("X-Original-Dst")  # Target IP
     original_host = request.headers.get("X-Original-Host")  # Original domain
     original_path = request.headers.get("X-Original-Path", "/")  # Default to "/"
+    app.logger.info(f"Headers received: {dict(request.headers)}")  # 打印所有请求头
+    app.logger.info(f"X-Original-Host: {original_host}, X-Original-Dst: {dst}")
 
     if not dst:
         app.logger.warning("Missing X-Original-Dst header")
