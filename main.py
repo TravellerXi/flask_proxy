@@ -1,54 +1,45 @@
 import requests
 import logging
-from flask import Flask, request, Response, render_template
-from ipaddress import ip_address, AddressValueError
-import os
+from flask import Flask, request, Response
 import sys
 
+# 初始化 Flask
 app = Flask(__name__)
 
-app.template_folder = os.path.join(os.path.dirname(__file__), "templates")
-
+# 配置日志
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(message)s",
     handlers=[
-        logging.FileHandler("proxy.log", encoding="utf-8"),
-        logging.StreamHandler(sys.stdout)
+        logging.FileHandler("proxy.log", encoding="utf-8"),  # 日志文件
+        logging.StreamHandler(sys.stdout)  # 终端输出
     ]
 )
 
-def format_host_for_requests(dst):
-    try:
-        host, port = dst.rsplit(":", 1)
-        if ":" in host and isinstance(ip_address(host), ip_address):
-            return f"[{host}]:{port}"
-        return f"{host}:{port}"
-    except (ValueError, AddressValueError):
-        return dst
-
 @app.route("/proxy", methods=["POST"])
 def proxy():
-    dst = request.headers.get("X-Original-Dst")
-    original_host = request.headers.get("X-Original-Host")
-    original_path = request.headers.get("X-Original-Path", "/")
-    original_method = request.headers.get("X-Original-Method", "GET")
+    """处理 HTTP 和 HTTPS 代理请求"""
+    dst = request.headers.get("X-Original-Dst")  # 目标 IP 或域名
+    original_host = request.headers.get("X-Original-Host")  # 真实域名
+    original_path = request.headers.get("X-Original-Path", "/")  # 请求路径
+    original_method = request.headers.get("X-Original-Method", "GET")  # HTTP 方法
 
     if not dst:
-        return render_template("error.html", error_message="Missing target address"), 400
+        return Response("Missing X-Original-Dst header", status=400)
 
+    # 解析目标 URL
     protocol = "https" if dst.endswith(":443") else "http"
-    target_host = original_host.strip() if original_host and original_host.strip() else dst
+    target_host = original_host if original_host else dst.split(":")[0]
     target_url = f"{protocol}://{target_host}{original_path}"
 
-    logging.info(f"Received proxy request: {original_method} {target_host}{original_path}")
-    logging.info(f"Target URL: {target_url}")
+    logging.info(f"Received proxy request: {original_method} {target_url}")
 
     try:
-        headers = {k: v for k, v in request.headers.items() if k.lower() not in ['host', 'x-original-method']}
-        headers["User-Agent"] = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/110.0.0.0 Safari/537.36"
+        # 复制请求头（去掉代理相关头部）
+        headers = {k: v for k, v in request.headers.items() if k.lower() not in ["host", "x-original-method"]}
         headers["Host"] = target_host
 
+        # 代理请求
         resp = requests.request(
             method=original_method,
             url=target_url,
@@ -61,16 +52,18 @@ def proxy():
             stream=True
         )
 
+        # 读取返回数据
         response_content = resp.raw.read()
         logging.info(f"Target server response: {resp.status_code}")
+
         return Response(response_content, status=resp.status_code, headers=dict(resp.headers))
 
     except requests.Timeout:
         logging.error(f"Proxy request timeout: {target_url}")
-        return render_template("error.html", error_message="Request timeout, please try again later"), 504
+        return Response("Request timeout, please try again later", status=504)
     except requests.RequestException as e:
         logging.error(f"Proxy request failed: {target_url}, Error: {str(e)}")
-        return render_template("error.html", error_message=f"Proxy error: {str(e)}"), 502
+        return Response(f"Proxy error: {str(e)}", status=502)
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5555, debug=True)

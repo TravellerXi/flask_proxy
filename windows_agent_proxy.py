@@ -5,35 +5,30 @@ import select
 import winreg
 import atexit
 
-# 远程 Flask 代理服务器地址
-FLASK_PROXY_URL = "http://your-server-ip:5000/proxy"
-
-# 本地代理服务器端口
-LOCAL_PROXY_PORT = 8080
-
+# Flask 代理服务器地址
+FLASK_PROXY_URL = "http://your-server-ip:5555/proxy"
+LOCAL_PROXY_PORT = 8080  # 本地代理端口
 
 # 修改 Windows 代理
 def set_proxy(proxy):
     key = r"Software\Microsoft\Windows\CurrentVersion\Internet Settings"
     try:
         with winreg.OpenKey(winreg.HKEY_CURRENT_USER, key, 0, winreg.KEY_SET_VALUE) as reg:
-            winreg.SetValueEx(reg, "ProxyEnable", 0, winreg.REG_DWORD, 1)  # 启用代理
-            winreg.SetValueEx(reg, "ProxyServer", 0, winreg.REG_SZ, proxy)  # 设置代理地址
+            winreg.SetValueEx(reg, "ProxyEnable", 0, winreg.REG_DWORD, 1)
+            winreg.SetValueEx(reg, "ProxyServer", 0, winreg.REG_SZ, proxy)
         print(f"已设置 Windows 代理: {proxy}")
     except Exception as e:
         print(f"设置代理失败: {e}")
-
 
 # 关闭 Windows 代理
 def disable_proxy():
     key = r"Software\Microsoft\Windows\CurrentVersion\Internet Settings"
     try:
         with winreg.OpenKey(winreg.HKEY_CURRENT_USER, key, 0, winreg.KEY_SET_VALUE) as reg:
-            winreg.SetValueEx(reg, "ProxyEnable", 0, winreg.REG_DWORD, 0)  # 禁用代理
+            winreg.SetValueEx(reg, "ProxyEnable", 0, winreg.REG_DWORD, 0)
         print("已关闭 Windows 代理")
     except Exception as e:
         print(f"关闭代理失败: {e}")
-
 
 # 处理 HTTP 请求
 def handle_http_request(client_socket, request_data):
@@ -57,12 +52,12 @@ def handle_http_request(client_socket, request_data):
             headers[key.strip()] = value.strip()
 
         # 转发到 Flask 服务器
-        response = requests.post(FLASK_PROXY_URL, json={
-            "url": url,
-            "method": method,
-            "headers": headers,
-            "body": body.decode("utf-8") if body else None
-        })
+        response = requests.post(FLASK_PROXY_URL, headers={
+            "X-Original-Dst": url,
+            "X-Original-Host": url.split("//")[-1].split("/")[0],
+            "X-Original-Path": "/" + "/".join(url.split("//")[-1].split("/")[1:]),
+            "X-Original-Method": method
+        }, data=body)
 
         # 发送响应给客户端
         client_socket.sendall(f"HTTP/1.1 {response.status_code} OK\r\n".encode())
@@ -77,8 +72,7 @@ def handle_http_request(client_socket, request_data):
     finally:
         client_socket.close()
 
-
-# 处理 HTTPS CONNECT 请求
+# 处理 HTTPS 请求
 def handle_https_request(client_socket, address, port):
     try:
         remote_socket = socket.create_connection((address, int(port)))
@@ -101,7 +95,6 @@ def handle_https_request(client_socket, address, port):
     finally:
         client_socket.close()
 
-
 # 代理服务器主线程
 def proxy_server():
     server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -122,7 +115,6 @@ def proxy_server():
             threading.Thread(target=handle_https_request, args=(client_socket, address, port)).start()
         else:
             threading.Thread(target=handle_http_request, args=(client_socket, request_data)).start()
-
 
 if __name__ == "__main__":
     # 设置代理，并确保退出时恢复系统代理
