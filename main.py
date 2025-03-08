@@ -3,6 +3,7 @@ import logging
 from flask import Flask, request, Response, render_template
 from ipaddress import ip_address, AddressValueError
 import os
+import sys
 
 # 初始化 Flask
 app = Flask(__name__)
@@ -15,8 +16,8 @@ logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(message)s",
     handlers=[
-        logging.FileHandler("proxy.log"),  # 日志文件
-        logging.StreamHandler()  # 终端输出
+        logging.FileHandler("proxy.log",encoding="utf-8"),  # 日志文件
+        logging.StreamHandler(sys.stdout)  # 终端输出
     ]
 )
 
