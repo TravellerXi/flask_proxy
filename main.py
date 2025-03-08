@@ -33,9 +33,9 @@ def format_host_for_requests(dst):
 
 @app.route("/proxy", methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"])
 def proxy():
-    dst = request.headers.get("X-Original-Dst")  # Target IP (for access)
-    original_host = request.headers.get("X-Original-Host")  # Original domain (for Host header)
-    original_path = request.headers.get("X-Original-Path") or request.full_path  # Ensure correct path
+    dst = request.headers.get("X-Original-Dst")  # Target IP
+    original_host = request.headers.get("X-Original-Host")  # Original domain
+    original_path = request.headers.get("X-Original-Path", "/")  # Default to "/"
 
     if not dst:
         app.logger.warning("Missing X-Original-Dst header")
@@ -43,15 +43,12 @@ def proxy():
 
     formatted_dst = format_host_for_requests(dst)  # Ensure IPv6 correctness
     protocol = "https" if formatted_dst.endswith(":443") else "http"  # Determine protocol
-    target_url = f"{protocol}://{formatted_dst}{original_path}"
+
+    # Fix: Use original_host if available, otherwise fallback to formatted_dst
+    target_url = f"{protocol}://{original_host or formatted_dst}{original_path}"
 
     app.logger.info(f"Received proxy request: {request.method} {original_host or dst}{original_path}")
     app.logger.info(f"Target URL: {target_url}")
-
-    # Log request headers and body
-    app.logger.info(f"Request headers: {dict(request.headers)}")
-    if request.get_data():
-        app.logger.info(f"Request body: {request.get_data().decode(errors='ignore')}")
 
     try:
         # Copy headers and replace Host header
@@ -70,12 +67,7 @@ def proxy():
             timeout=10
         )
 
-        # Log response details
         app.logger.info(f"Target server response: {resp.status_code}")
-        app.logger.info(f"Response headers: {dict(resp.headers)}")
-        if resp.content:
-            app.logger.info(f"Response body: {resp.content[:500].decode(errors='ignore')}...")
-
         return Response(resp.content, status=resp.status_code, headers=dict(resp.headers))
 
     except requests.Timeout:
