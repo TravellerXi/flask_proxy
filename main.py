@@ -44,17 +44,17 @@ def proxy():
     formatted_dst = format_host_for_requests(dst)  # Ensure IPv6 correctness
     protocol = "https" if formatted_dst.endswith(":443") else "http"  # Determine protocol
 
-    # Fix: Use original_host if available, otherwise fallback to formatted_dst
-    target_url = f"{protocol}://{original_host or formatted_dst}{original_path}"
+    # Use original_host if available, otherwise fallback to formatted_dst
+    target_host = original_host if original_host else formatted_dst
+    target_url = f"{protocol}://{target_host}{original_path}"
 
-    app.logger.info(f"Received proxy request: {request.method} {original_host or dst}{original_path}")
+    app.logger.info(f"Received proxy request: {request.method} {target_host}{original_path}")
     app.logger.info(f"Target URL: {target_url}")
 
     try:
         # Copy headers and replace Host header
         headers = {k: v for k, v in request.headers.items() if k.lower() != 'host'}
-        if original_host:
-            headers["Host"] = original_host  # Ensure original domain is used
+        headers["Host"] = target_host  # Ensure correct Host header
 
         # Proxy request with corrected URL, disable SSL certificate validation
         resp = requests.request(
