@@ -22,6 +22,28 @@ def extract_http_method(data):
     return "GET"  # Default to GET if method cannot be extracted
 
 
+def extract_hostname_from_http(data):
+    """Extract Host from HTTP headers."""
+    try:
+        match = re.search(rb"Host:\s*([^\r\n]+)", data, re.IGNORECASE)
+        if match:
+            return match.group(1).decode()
+    except Exception:
+        pass
+    return None
+
+
+def extract_http_path(data):
+    """Extract the full HTTP request path."""
+    try:
+        match = re.search(rb"(GET|POST|PUT|DELETE|HEAD|OPTIONS|PATCH)\s+([^\s]+)\s+HTTP/", data, re.IGNORECASE)
+        if match:
+            return match.group(2).decode()
+    except Exception:
+        pass
+    return "/"
+
+
 def send_to_flask(packet, hostname, http_path):
     """Send the intercepted packet to the Flask proxy."""
     dst_ip = packet.dst_addr
@@ -56,7 +78,7 @@ with pydivert.WinDivert(FILTER_RULE) as w:
                     hostname = extract_hostname_from_http(packet.payload)
                     http_path = extract_http_path(packet.payload)
                 elif packet.dst_port == 443:
-                    hostname = extract_sni(packet.payload)
+                    hostname = None  # HTTPS does not contain direct hostname in payload
                     http_path = "/"
 
                 modified_payload = send_to_flask(packet, hostname, http_path)

@@ -18,6 +18,15 @@ logging.basicConfig(
     ]
 )
 
+def format_host_for_requests(dst):
+    try:
+        host, port = dst.rsplit(":", 1)
+        if ":" in host and isinstance(ip_address(host), ip_address):
+            return f"[{host}]:{port}"
+        return f"{host}:{port}"
+    except (ValueError, AddressValueError):
+        return dst
+
 @app.route("/proxy", methods=["POST"])
 def proxy():
     dst = request.headers.get("X-Original-Dst")
