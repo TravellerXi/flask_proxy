@@ -35,21 +35,20 @@ def format_host_for_requests(dst):
 def proxy():
     dst = request.headers.get("X-Original-Dst")  # Target IP (for access)
     original_host = request.headers.get("X-Original-Host")  # Original domain (for Host header)
+    original_path = request.headers.get("X-Original-Path") or request.full_path  # Ensure correct path
 
     if not dst:
         app.logger.warning("Missing X-Original-Dst header")
         return render_template("error.html", error_message="Missing target address"), 400
 
-    formatted_dst = format_host_for_requests(dst)  # Ensure IPv6 formatting
-    target_path = request.path  # Get original path
-    query_string = request.query_string.decode()  # Get query parameters
-    target_url = f"http://{formatted_dst}{target_path}" + (f"?{query_string}" if query_string else "")
-    display_host = original_host or dst  # Used for logging
+    formatted_dst = format_host_for_requests(dst)  # Ensure IPv6 correctness
+    protocol = "https" if formatted_dst.endswith(":443") else "http"  # Determine protocol
+    target_url = f"{protocol}://{formatted_dst}{original_path}"
 
-    app.logger.info(f"Received proxy request: {request.method} {display_host}{target_path}")
-
-    # Log request details
+    app.logger.info(f"Received proxy request: {request.method} {original_host or dst}{original_path}")
     app.logger.info(f"Target URL: {target_url}")
+
+    # Log request headers and body
     app.logger.info(f"Request headers: {dict(request.headers)}")
     if request.get_data():
         app.logger.info(f"Request body: {request.get_data().decode(errors='ignore')}")
@@ -58,26 +57,25 @@ def proxy():
         # Copy headers and replace Host header
         headers = {k: v for k, v in request.headers.items() if k.lower() != 'host'}
         if original_host:
-            headers["Host"] = original_host  # Ensure server recognizes the original domain
+            headers["Host"] = original_host  # Ensure original domain is used
 
-        # Proxy request
+        # Proxy request with corrected URL
         resp = requests.request(
-            method=request.method,  # Forward original HTTP method
-            url=target_url,  # Target URL
-            headers=headers,  # Modified headers
-            data=request.get_data(),  # Copy body
-            cookies=request.cookies,  # Copy cookies
-            allow_redirects=False,  # Disable automatic redirects
-            timeout=10  # Timeout duration
+            method=request.method,
+            url=target_url,
+            headers=headers,
+            data=request.get_data(),
+            cookies=request.cookies,
+            allow_redirects=False,
+            timeout=10
         )
 
         # Log response details
         app.logger.info(f"Target server response: {resp.status_code}")
         app.logger.info(f"Response headers: {dict(resp.headers)}")
         if resp.content:
-            app.logger.info(f"Response body: {resp.content[:500].decode(errors='ignore')}...")  # Avoid large logs
+            app.logger.info(f"Response body: {resp.content[:500].decode(errors='ignore')}...")
 
-        # Return proxy response
         return Response(resp.content, status=resp.status_code, headers=dict(resp.headers))
 
     except requests.Timeout:
