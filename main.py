@@ -36,10 +36,12 @@ def proxy():
         return "Missing destination", 400
 
     formatted_dst = format_host_for_requests(dst)  # 确保 IPv6 正确
-    target_url = f"http://{formatted_dst}{request.full_path}"  # 目标地址
+    target_path = request.path  # 获取原始路径
+    query_string = request.query_string.decode()  # 获取查询参数
+    target_url = f"http://{formatted_dst}{target_path}" + (f"?{query_string}" if query_string else "")
     display_host = original_host or dst  # 用于日志的显示
 
-    app.logger.info(f"🌍 收到代理请求: {request.method} {display_host}{request.full_path}")
+    app.logger.info(f"🌍 收到代理请求: {request.method} {display_host}{target_path}")
 
     # 记录请求详情
     app.logger.info(f"🔗 目标访问 URL: {target_url}")
