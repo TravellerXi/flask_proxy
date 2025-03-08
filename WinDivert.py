@@ -53,7 +53,6 @@ def extract_sni(tls_data):
         print(f"❌ SNI extraction failed: {e}")
     return None
 
-
 def extract_hostname_from_http(data):
     """Extract Host from HTTP headers."""
     try:
