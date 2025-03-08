@@ -18,9 +18,9 @@ def set_proxy(proxy):
         with winreg.OpenKey(winreg.HKEY_CURRENT_USER, key, 0, winreg.KEY_SET_VALUE) as reg:
             winreg.SetValueEx(reg, "ProxyEnable", 0, winreg.REG_DWORD, 1)
             winreg.SetValueEx(reg, "ProxyServer", 0, winreg.REG_SZ, proxy)
-        print(f"已设置 Windows 代理: {proxy}")
+        print(f"✅ Windows 代理已设置: {proxy}")
     except Exception as e:
-        print(f"设置代理失败: {e}")
+        print(f"❌ 设置代理失败: {e}")
 
 # 关闭 Windows 代理
 def disable_proxy():
@@ -28,9 +28,9 @@ def disable_proxy():
     try:
         with winreg.OpenKey(winreg.HKEY_CURRENT_USER, key, 0, winreg.KEY_SET_VALUE) as reg:
             winreg.SetValueEx(reg, "ProxyEnable", 0, winreg.REG_DWORD, 0)
-        print("已关闭 Windows 代理")
+        print("✅ Windows 代理已关闭")
     except Exception as e:
-        print(f"关闭代理失败: {e}")
+        print(f"❌ 关闭代理失败: {e}")
 
 # 处理 HTTP 请求
 def handle_http_request(client_socket, request_data):
@@ -101,7 +101,7 @@ def handle_https_request(client_socket, address, port):
                     client_socket.sendall(data)
 
     except Exception as e:
-        print(f"HTTPS 代理错误: {e}")
+        print(f"⚠ HTTPS 代理错误: {e}")
     finally:
         client_socket.close()
 
@@ -111,7 +111,7 @@ def proxy_server():
     server.bind(("127.0.0.1", LOCAL_PROXY_PORT))
     server.listen(100)
 
-    print(f"本地代理服务器运行在 127.0.0.1:{LOCAL_PROXY_PORT}")
+    print(f"🚀 代理服务器已启动: 127.0.0.1:{LOCAL_PROXY_PORT}")
 
     while True:
         client_socket, _ = server.accept()
@@ -133,5 +133,5 @@ if __name__ == "__main__":
     try:
         proxy_server()
     except KeyboardInterrupt:
-        print("程序退出...")
+        print("🔴 程序退出...")
         disable_proxy()
