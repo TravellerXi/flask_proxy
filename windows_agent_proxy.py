@@ -5,11 +5,13 @@ import select
 import winreg
 import atexit
 
-# Flask 代理服务器地址
-FLASK_PROXY_URL = "http://your-server-ip:5555/proxy"
-LOCAL_PROXY_PORT = 8080  # 本地代理端口
+# 远程 Flask 代理服务器地址
+FLASK_PROXY_URL = "http://127.0.0.1:5555/proxy"
 
-# 修改 Windows 代理
+# 本地代理服务器端口
+LOCAL_PROXY_PORT = 8080
+
+# 设置 Windows 代理
 def set_proxy(proxy):
     key = r"Software\Microsoft\Windows\CurrentVersion\Internet Settings"
     try:
@@ -34,7 +36,15 @@ def disable_proxy():
 def handle_http_request(client_socket, request_data):
     try:
         lines = request_data.split(b"\r\n")
-        first_line = lines[0].decode("utf-8")
+        if len(lines) < 1:
+            client_socket.close()
+            return
+
+        first_line = lines[0].decode("utf-8", errors="ignore").strip()
+        if " " not in first_line:
+            client_socket.close()
+            return
+
         method, url, _ = first_line.split(" ", 2)
 
         headers = {}
@@ -46,18 +56,18 @@ def handle_http_request(client_socket, request_data):
                 is_body = True
                 continue
             if is_body:
-                body = line
+                body = line.decode("utf-8", errors="ignore")
                 break
-            key, value = line.decode("utf-8").split(":", 1)
+            key, value = line.decode("utf-8", errors="ignore").split(":", 1)
             headers[key.strip()] = value.strip()
 
-        # 转发到 Flask 服务器
-        response = requests.post(FLASK_PROXY_URL, headers={
-            "X-Original-Dst": url,
-            "X-Original-Host": url.split("//")[-1].split("/")[0],
-            "X-Original-Path": "/" + "/".join(url.split("//")[-1].split("/")[1:]),
-            "X-Original-Method": method
-        }, data=body)
+        # 发送到 Flask 代理服务器
+        response = requests.post(FLASK_PROXY_URL, json={
+            "url": url,
+            "method": method,
+            "headers": headers,
+            "body": body if body else None
+        })
 
         # 发送响应给客户端
         client_socket.sendall(f"HTTP/1.1 {response.status_code} OK\r\n".encode())
@@ -72,7 +82,7 @@ def handle_http_request(client_socket, request_data):
     finally:
         client_socket.close()
 
-# 处理 HTTPS 请求
+# 处理 HTTPS CONNECT 请求
 def handle_https_request(client_socket, address, port):
     try:
         remote_socket = socket.create_connection((address, int(port)))
@@ -109,7 +119,7 @@ def proxy_server():
 
         # 解析请求类型
         if request_data.startswith(b"CONNECT"):
-            first_line = request_data.split(b"\r\n")[0].decode("utf-8")
+            first_line = request_data.split(b"\r\n")[0].decode("utf-8", errors="ignore")
             _, address_port, _ = first_line.split()
             address, port = address_port.split(":")
             threading.Thread(target=handle_https_request, args=(client_socket, address, port)).start()
@@ -117,7 +127,6 @@ def proxy_server():
             threading.Thread(target=handle_http_request, args=(client_socket, request_data)).start()
 
 if __name__ == "__main__":
-    # 设置代理，并确保退出时恢复系统代理
     set_proxy("127.0.0.1:8080")
     atexit.register(disable_proxy)
 
