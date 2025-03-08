@@ -1,10 +1,14 @@
 import requests
 import logging
-from flask import Flask, request, Response
+from flask import Flask, request, Response, render_template
 from ipaddress import ip_address, AddressValueError
+import os
 
 # 初始化 Flask
 app = Flask(__name__)
+
+# 设置模板文件夹
+app.template_folder = os.path.join(os.path.dirname(__file__), "templates")
 
 # 配置日志格式
 logging.basicConfig(
@@ -33,7 +37,7 @@ def proxy():
 
     if not dst:
         app.logger.warning("❌ 缺少 X-Original-Dst 头")
-        return "Missing destination", 400
+        return render_template("error.html", error_message="缺少目标地址"), 400
 
     formatted_dst = format_host_for_requests(dst)  # 确保 IPv6 正确
     target_path = request.path  # 获取原始路径
@@ -77,10 +81,10 @@ def proxy():
 
     except requests.Timeout:
         app.logger.error(f"⏳ 代理请求超时: {target_url}")
-        return "Request Timeout", 504
+        return render_template("error.html", error_message="请求超时，请稍后再试"), 504
     except requests.RequestException as e:
         app.logger.error(f"🚨 代理请求失败: {target_url}，错误: {str(e)}")
-        return f"Proxy Error: {str(e)}", 502
+        return render_template("error.html", error_message=f"代理错误: {str(e)}"), 502
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5555, debug=True)
