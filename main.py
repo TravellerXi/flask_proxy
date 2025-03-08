@@ -31,55 +31,45 @@ def format_host_for_requests(dst):
     except (ValueError, AddressValueError):
         return dst  # Return original value if formatting fails
 
-@app.route("/proxy", methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"])
+@app.route("/proxy", methods=["POST"])
 def proxy():
     dst = request.headers.get("X-Original-Dst")  # Target IP
     original_host = request.headers.get("X-Original-Host")  # Original domain
     original_path = request.headers.get("X-Original-Path", "/")  # Default to "/"
+    original_method = request.headers.get("X-Original-Method", "POST")  # Default to POST
 
     if not dst:
         app.logger.warning("Missing X-Original-Dst header")
         return render_template("error.html", error_message="Missing target address"), 400
 
-    formatted_dst = format_host_for_requests(dst)  # Ensure IPv6 correctness
-    protocol = "https" if dst.endswith(":443") else "http"  # Determine protocol
+    formatted_dst = format_host_for_requests(dst)
+    protocol = "https" if dst.endswith(":443") else "http"
 
-    # Ensure `original_host` is non-empty; otherwise, use dst (raw IP)
     target_host = original_host.strip() if original_host and original_host.strip() else dst
     target_url = f"{protocol}://{target_host}{original_path}"
 
-    app.logger.info(f"Received proxy request: {request.method} {target_host}{original_path}")
+    app.logger.info(f"Received proxy request: {original_method} {target_host}{original_path}")
     app.logger.info(f"Target URL: {target_url}")
 
     try:
-        # Copy headers and replace Host header
-        headers = {k: v for k, v in request.headers.items() if k.lower() != 'host'}
-
-        # Set User-Agent to avoid being blocked
+        headers = {k: v for k, v in request.headers.items() if k.lower() not in ['host', 'x-original-method']}
         headers["User-Agent"] = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/110.0.0.0 Safari/537.36"
+        headers["Host"] = target_host
 
-        # Set Host header correctly
-        headers["Host"] = original_host.strip() if original_host and original_host.strip() else dst
-
-        # Proxy request with corrected URL, disable SSL certificate validation
+        # Forward binary data without modifying
         resp = requests.request(
-            method=request.method,
+            method=original_method,
             url=target_url,
             headers=headers,
             data=request.get_data(),
             cookies=request.cookies,
             allow_redirects=False,
             timeout=10,
-            verify=False,  # Disable SSL certificate verification
-            stream=True  # Handle chunked encoding manually
+            verify=False,
+            stream=True
         )
 
-        try:
-            response_content = resp.raw.read()  # Read response content
-        except requests.exceptions.ChunkedEncodingError:
-            app.logger.error(f"⚠ Chunked Encoding Error: {target_url}")
-            response_content = b""  # Return empty body if chunked encoding fails
-
+        response_content = resp.raw.read()
         app.logger.info(f"Target server response: {resp.status_code}")
         return Response(response_content, status=resp.status_code, headers=dict(resp.headers))
 
