@@ -16,7 +16,7 @@ logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(message)s",
     handlers=[
-        logging.FileHandler("proxy.log",encoding="utf-8"),  # 日志文件
+        logging.FileHandler("proxy.log", encoding="utf-8"),  # 日志文件
         logging.StreamHandler(sys.stdout)  # 终端输出
     ]
 )
@@ -37,7 +37,7 @@ def proxy():
     original_host = request.headers.get("X-Original-Host")  # 原始域名（用于 Host 头）
 
     if not dst:
-        app.logger.warning("❌ 缺少 X-Original-Dst 头")
+        app.logger.warning("缺少 X-Original-Dst 头")
         return render_template("error.html", error_message="缺少目标地址"), 400
 
     formatted_dst = format_host_for_requests(dst)  # 确保 IPv6 正确
@@ -46,13 +46,13 @@ def proxy():
     target_url = f"http://{formatted_dst}{target_path}" + (f"?{query_string}" if query_string else "")
     display_host = original_host or dst  # 用于日志的显示
 
-    app.logger.info(f"🌍 收到代理请求: {request.method} {display_host}{target_path}")
+    app.logger.info(f"收到代理请求: {request.method} {display_host}{target_path}")
 
     # 记录请求详情
-    app.logger.info(f"🔗 目标访问 URL: {target_url}")
-    app.logger.info(f"📌 请求头: {dict(request.headers)}")
+    app.logger.info(f"目标访问 URL: {target_url}")
+    app.logger.info(f"请求头: {dict(request.headers)}")
     if request.get_data():
-        app.logger.info(f"📦 请求 Body: {request.get_data().decode(errors='ignore')}")
+        app.logger.info(f"请求 Body: {request.get_data().decode(errors='ignore')}")
 
     try:
         # 复制 Headers，并替换 Host 头
@@ -72,19 +72,19 @@ def proxy():
         )
 
         # 记录响应信息
-        app.logger.info(f"✅ 目标服务器响应: {resp.status_code}")
-        app.logger.info(f"📌 响应头: {dict(resp.headers)}")
+        app.logger.info(f"目标服务器响应: {resp.status_code}")
+        app.logger.info(f"响应头: {dict(resp.headers)}")
         if resp.content:
-            app.logger.info(f"📦 响应 Body: {resp.content[:500].decode(errors='ignore')}...")  # 避免日志过大
+            app.logger.info(f"响应 Body: {resp.content[:500].decode(errors='ignore')}...")  # 避免日志过大
 
         # 返回代理响应
         return Response(resp.content, status=resp.status_code, headers=dict(resp.headers))
 
     except requests.Timeout:
-        app.logger.error(f"⏳ 代理请求超时: {target_url}")
+        app.logger.error(f"代理请求超时: {target_url}")
         return render_template("error.html", error_message="请求超时，请稍后再试"), 504
     except requests.RequestException as e:
-        app.logger.error(f"🚨 代理请求失败: {target_url}，错误: {str(e)}")
+        app.logger.error(f"代理请求失败: {target_url}，错误: {str(e)}")
         return render_template("error.html", error_message=f"代理错误: {str(e)}"), 502
 
 if __name__ == "__main__":
